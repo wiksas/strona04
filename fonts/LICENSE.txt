@@ -1,0 +1,7 @@
+Atkinson Hyperlegible Next and Atkinson Hyperlegible Mono
+Copyright 2020 The Atkinson Hyperlegible Project Authors (https://github.com/googlefonts/atkinson-hyperlegible-next)
+
+These Font Software files are licensed under the SIL Open Font License, Version 1.1.
+Full text: https://openfontlicense.org/open-font-license-official-text/
+
+Files are the woff2 latin and latin-ext subsets distributed by Fontsource (https://fontsource.org).

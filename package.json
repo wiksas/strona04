@@ -1,0 +1,8 @@
+{
+  "name": "podsieci",
+  "private": true,
+  "description": "Nauka i test z zadań z podziału sieci (IPv4, VLSM, FLSM).",
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\""
+  }
+}
