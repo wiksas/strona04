@@ -81,7 +81,7 @@
       node.append(
         h('div', { class: 'empty' },
           h('p', null, h('strong', null, 'Nie masz jeszcze wyników.')),
-          h('p', null, 'Wybierz dowolny typ zadania poniżej albo rozwiąż test z zadań z zajęć. Wyniki zapisują się w tej przeglądarce.'))
+          h('p', null, 'Wybierz dowolny typ zadania poniżej albo rozwiąż test z jednego z arkuszy. Wyniki zapisują się w tej przeglądarce.'))
       );
     } else {
       node.append(
@@ -138,14 +138,14 @@
 
     function load(task, fromSheet) {
       sessionCounts[typeId] = (sessionCounts[typeId] || 0) + 1;
-      meta.textContent = fromSheet ? 'Zadanie z zajęć: ' + task.label : 'Zadanie losowe, nr ' + sessionCounts[typeId] + ' w tej sesji';
+      meta.textContent = fromSheet ? 'Zadanie z arkusza: ' + task.label : 'Zadanie losowe, nr ' + sessionCounts[typeId] + ' w tej sesji';
       let checked = false;
       const form = taskForm(task, { onSubmit: check });
       const outcome = h('section', { class: 'outcome', hidden: true, 'aria-labelledby': 'outcome-title' });
       const actions = h('div', { class: 'actions' },
         h('button', { type: 'submit', class: 'btn btn-primary' }, 'Sprawdź odpowiedzi'),
         h('button', { type: 'button', class: 'btn', onclick: () => load(Tasks.generate(typeId), false) }, 'Wylosuj inne zadanie'),
-        h('button', { type: 'button', class: 'btn', onclick: () => load(Tasks.fixedTask(typeId), true) }, 'Wczytaj zadanie z zajęć'));
+        h('button', { type: 'button', class: 'btn', onclick: () => load(Tasks.fixedTask(typeId), true) }, 'Wczytaj zadanie z arkusza'));
       form.el.appendChild(actions);
 
       function check() {
@@ -166,7 +166,7 @@
           solutionBlocks(Tasks.solve(task)),
           h('div', { class: 'actions' },
             h('button', { type: 'button', class: 'btn btn-primary', onclick: () => load(Tasks.generate(typeId), false) }, 'Następne zadanie losowe'),
-            h('button', { type: 'button', class: 'btn', onclick: () => load(Tasks.fixedTask(typeId), true) }, 'Wczytaj zadanie z zajęć')));
+            h('button', { type: 'button', class: 'btn', onclick: () => load(Tasks.fixedTask(typeId), true) }, 'Wczytaj zadanie z arkusza')));
         announce(summary);
         title.focus();
       }
@@ -195,13 +195,18 @@
     }).then((ok) => ok && begin());
   }
 
-  const KIND_NAME = { fixed: 'zestaw z zajęć', random: 'zestaw losowy' };
+  const KIND_NAME = {
+    fixed: 'arkusz 1, zadania z arkusza',
+    random: 'arkusz 1, losowe',
+    fixed2: 'arkusz 2, zadania z arkusza',
+    random2: 'arkusz 2, losowe',
+  };
 
   function testHomeView() {
     const node = h('div', { class: 'view' });
     node.append(
       h('h1', { tabindex: '-1' }, 'Test'),
-      h('p', { class: 'lede' }, 'Dziewięć zadań w jednym podejściu. Poprawność zobaczysz dopiero po zakończeniu, razem z rozwiązaniami każdego zadania.'),
+      h('p', { class: 'lede' }, 'Każdy arkusz to jedno podejście. Poprawność zobaczysz dopiero po zakończeniu, razem z rozwiązaniami każdego zadania. Wersja losowa ma te same typy zadań, ale nowe liczby i adresy.'),
       storageNotice()
     );
 
@@ -219,11 +224,15 @@
     node.append(
       h('ul', { class: 'topics' },
         h('li', { class: 'topic' },
-          h('div', { class: 'topic-text' }, h('h2', null, 'Zestaw z zajęć'), h('p', { class: 'muted' }, 'Dziewięć zadań z arkusza, w tej samej kolejności i z tymi samymi liczbami i adresami.')),
-          h('button', { type: 'button', class: 'btn btn-primary', onclick: () => startTest('fixed') }, 'Rozpocznij test z zajęć')),
+          h('div', { class: 'topic-text' }, h('h2', null, 'Arkusz 1'), h('p', { class: 'muted' }, 'Dziewięć zadań: systemy liczbowe, maski, klasy, adres sieci, VLSM, FLSM i suma hostów.')),
+          h('div', { class: 'topic-actions' },
+            h('button', { type: 'button', class: 'btn btn-primary', onclick: () => startTest('fixed') }, 'Zadania z arkusza 1'),
+            h('button', { type: 'button', class: 'btn', onclick: () => startTest('random') }, 'Losowe, arkusz 1'))),
         h('li', { class: 'topic' },
-          h('div', { class: 'topic-text' }, h('h2', null, 'Zestaw losowy'), h('p', { class: 'muted' }, 'Te same typy zadań, ale z nowymi liczbami i adresami przy każdym podejściu.')),
-          h('button', { type: 'button', class: 'btn', onclick: () => startTest('random') }, 'Rozpocznij test losowy')))
+          h('div', { class: 'topic-text' }, h('h2', null, 'Arkusz 2'), h('p', { class: 'muted' }, 'Cztery zadania z pełnymi danymi podsieci: klasa i adres sieci, FLSM, podsieci o zadanej liczbie adresów i VLSM.')),
+          h('div', { class: 'topic-actions' },
+            h('button', { type: 'button', class: 'btn btn-primary', onclick: () => startTest('fixed2') }, 'Zadania z arkusza 2'),
+            h('button', { type: 'button', class: 'btn', onclick: () => startTest('random2') }, 'Losowe, arkusz 2'))))
     );
 
     const tests = Store.tests();
@@ -321,7 +330,7 @@
         h('p', { class: 'score-main' }, h('span', { class: 'mono score-number' }, r.correct + ' z ' + r.total), ' poprawnych odpowiedzi (' + pct(r.correct, r.total) + '%)'),
         h('p', { class: 'muted' }, 'W całości poprawnie: ' + perfect + ' z ' + r.items.length + ' zadań. Czas: ' + mmss(r.seconds) + '. Zestaw: ' + KIND_NAME[r.kind] + '.')),
       h('div', { class: 'actions' },
-        h('button', { type: 'button', class: 'btn btn-primary', onclick: () => startTest(r.kind) }, r.kind === 'fixed' ? 'Powtórz test z zajęć' : 'Rozpocznij nowy test losowy'),
+        h('button', { type: 'button', class: 'btn btn-primary', onclick: () => startTest(r.kind) }, r.kind.startsWith('fixed') ? 'Powtórz ten test' : 'Rozpocznij nowy test losowy'),
         link('#/test', 'Wróć do listy testów', 'btn'))
     );
 

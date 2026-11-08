@@ -101,6 +101,12 @@
     return { fields, correct: ids.filter((id) => fields[id].ok).length, total: ids.length };
   }
 
+  function judgeClassLetter(answer, cls) {
+    const letter = String(answer == null ? '' : answer).trim().toUpperCase().replace(/^KLASA\s*/, '');
+    if (letter === '') return { ok: false, message: EMPTY, expected: cls };
+    return letter === cls ? { ok: true } : { ok: false, message: 'Niepoprawna odpowiedź.', expected: cls };
+  }
+
   // ---------- network generators ----------
 
   // Random aligned network base in a private-looking range, so generated tasks look like classroom exercises.
@@ -266,13 +272,7 @@
       const ip = Net.parseIp(task.params.ip);
       const cls = Net.classOf(ip);
       const info = Net.CLASS_INFO[cls];
-      const letter = String(answers.class == null ? '' : answers.class).trim().toUpperCase().replace(/^KLASA\s*/, '');
-      const classField =
-        letter === ''
-          ? { ok: false, message: EMPTY, expected: cls }
-          : letter === cls
-            ? { ok: true }
-            : { ok: false, message: 'Niepoprawna odpowiedź.', expected: cls };
+      const classField = judgeClassLetter(answers.class, cls);
       const networkAccepted = [info.networks, info.usableNetworks];
       const networksExpected = cls === 'A' ? '128 (lub 126, jeśli odjąć zarezerwowane 0 i 127)' : fmt(info.networks);
       const correctOption = task.params.order.indexOf(0);
@@ -443,6 +443,7 @@
       const layout = plan.allocations.map((a) => [
         a.hosts + ' hostów',
         Net.cidrText(a.network, a.prefix),
+        Net.formatIp(Net.maskInt(a.prefix)),
         Net.formatIp(a.network + 1) + ' do ' + Net.formatIp(a.broadcast - 1),
         Net.formatIp(a.broadcast),
       ]);
@@ -450,7 +451,7 @@
         'Dla każdego wymagania szukamy najmniejszego bloku 2^{n}, w którym 2^{n} - 2 jest nie mniejsze niż liczba hostów. Kolejność od największego wymagania:',
         { table: { head: ['Wymaganie', 'Bity hosta (n)', 'Adresy w bloku', 'Użyteczne hosty', 'Prefiks'], rows: sizing } },
         'Układamy bloki w tej kolejności, każdy od pierwszego wolnego adresu. Sieć nadrzędna zaczyna się od ' + Net.formatIp(plan.start) + '.',
-        { table: { head: ['Wymaganie', 'Adres sieci/prefiks', 'Zakres hostów', 'Adres rozgłoszeniowy'], rows: layout } },
+        { table: { head: ['Wymaganie', 'Adres sieci/prefiks', 'Maska', 'Zakres hostów', 'Adres rozgłoszeniowy'], rows: layout } },
       ];
       if (plan.nextFree <= plan.end) {
         blocks.push('Wolne zostaje: od ' + Net.formatIp(plan.nextFree) + ' do ' + Net.formatIp(plan.end) + ' (' + fmt(plan.end - plan.nextFree + 1) + ' adresów).');
@@ -682,12 +683,279 @@
     },
   };
 
+  // ---------- tasks with full subnet details ----------
+
+  function parseMaskAnswer(text) {
+    const s = String(text == null ? '' : text).trim();
+    if (s === '') return { error: EMPTY };
+    const slash = /^\/?(\d{1,2})$/.exec(s);
+    if (slash && Number(slash[1]) <= 32) return { value: Number(slash[1]) };
+    const prefix = Net.prefixFromMask(s);
+    if (prefix !== null) return { value: prefix };
+    return { error: 'Maska to cztery liczby (najpierw same jedynki, potem same zera) albo prefiks w postaci /n.' };
+  }
+
+  function parseRangeAnswer(text) {
+    const s = String(text == null ? '' : text).trim();
+    if (s === '') return { error: EMPTY };
+    const parts = s.split(/\s*(?:-|\u2013|\u2014|\bdo\b)\s*/i);
+    if (parts.length !== 2) return { error: 'Podaj pierwszy i ostatni adres, oddzielone myślnikiem lub słowem "do".' };
+    const first = Net.parseIp(parts[0]);
+    const last = Net.parseIp(parts[1]);
+    if (first === null || last === null) return { error: 'Oba końce zakresu muszą być adresami IPv4.' };
+    return { value: { first, last } };
+  }
+
+  const maskText = (prefix) => Net.formatIp(Net.maskInt(prefix)) + ' (/' + prefix + ')';
+  const rowne = (n) => (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14) ? 'równe' : 'równych');
+
+  function detailFields(key, group, withHosts) {
+    const field = (suffix, label, hint) => ({ id: key + '_' + suffix, label, hint, kind: 'text', mono: true, group });
+    const fields = [
+      field('net', 'Adres podsieci', 'Cztery liczby oddzielone kropkami'),
+      field('mask', 'Maska', 'Dziesiętnie albo jako prefiks /n'),
+      field('bcast', 'Adres rozgłoszeniowy', 'Cztery liczby oddzielone kropkami'),
+      Object.assign(field('range', 'Zakres adresów hostowych', 'Pierwszy i ostatni adres, oddzielone myślnikiem lub słowem "do"'), { wide: true }),
+    ];
+    if (withHosts) fields.push(field('hosts', 'Liczba adresów hostowych', 'Liczba całkowita'));
+    return fields;
+  }
+
+  function checkDetail(answers, key, subnet, withHosts) {
+    const d = Net.describe(subnet.network, subnet.prefix);
+    const res = {};
+    res[key + '_net'] = judge(answers[key + '_net'], parseIpAnswer, (v) => v === d.network, Net.formatIp(d.network));
+    res[key + '_mask'] = judge(answers[key + '_mask'], parseMaskAnswer, (v) => v === d.prefix, maskText(d.prefix));
+    res[key + '_bcast'] = judge(answers[key + '_bcast'], parseIpAnswer, (v) => v === d.broadcast, Net.formatIp(d.broadcast));
+    res[key + '_range'] = judge(
+      answers[key + '_range'], parseRangeAnswer,
+      (v) => v.first === d.first && v.last === d.last,
+      Net.formatIp(d.first) + ' - ' + Net.formatIp(d.last)
+    );
+    if (withHosts) res[key + '_hosts'] = judge(answers[key + '_hosts'], parseNumber, (v) => v === d.hosts, fmt(d.hosts));
+    return res;
+  }
+
+  const classNet = {
+    id: 'classNet',
+    name: 'Klasa i adres sieci z maską',
+    summary: 'Klasa adresu oraz adres sieci i rozgłoszeniowy dla zadanej długości maski.',
+    generate: (rng) => {
+      let first = randInt(rng, 1, 223);
+      if (first === 127) first = 126;
+      const ip = [first, randInt(rng, 0, 255), randInt(rng, 0, 255), randInt(rng, 1, 254)].join('.');
+      return { ip, prefix: randInt(rng, 9, 29) };
+    },
+    build: ({ ip, prefix }) => ({
+      prompt: ['Do której z dawnych klas można zaliczyć adres IP: ' + ip + '? Podaj adres sieci oraz adres rozgłoszeniowy dla powyższego adresu z maską ' + prefix + ' bitową.'],
+      fields: [
+        textField('class', 'Klasa adresu', 'Litera A, B, C, D lub E'),
+        textField('network', 'Adres sieci', 'Cztery liczby oddzielone kropkami', true),
+        textField('broadcast', 'Adres rozgłoszeniowy', 'Cztery liczby oddzielone kropkami', true),
+      ],
+    }),
+    check: (task, answers) => {
+      const ip = Net.parseIp(task.params.ip);
+      const d = Net.describe(ip, task.params.prefix);
+      return summarize({
+        class: judgeClassLetter(answers.class, Net.classOf(ip)),
+        network: judge(answers.network, parseIpAnswer, (v) => v === d.network, Net.formatIp(d.network)),
+        broadcast: judge(answers.broadcast, parseIpAnswer, (v) => v === d.broadcast, Net.formatIp(d.broadcast)),
+      });
+    },
+    solve: (task) => {
+      const ip = Net.parseIp(task.params.ip);
+      const cls = Net.classOf(ip);
+      const info = Net.CLASS_INFO[cls];
+      const first = ip >>> 24;
+      return [
+        'Klasę wyznacza pierwszy oktet. W ' + task.params.ip + ' to ' + first + ', czyli ' + Net.toBin(first, 8) + ', początek bitów ' + info.leadBits + ', więc klasa **' + cls + '** (pierwszy oktet od ' + info.first + ' do ' + info.last + ').',
+        'Maska /' + task.params.prefix + ' jest tu inna niż domyślna maska klasy' + (info.prefix ? ' (/' + info.prefix + ')' : '') + ', ale klasa zależy wyłącznie od pierwszego oktetu. Adres sieci i rozgłoszeniowy liczymy z podanej maski:',
+      ].concat(netBroadcast.solve(task));
+    },
+  };
+
+  const flsmDetail = {
+    id: 'flsmDetail',
+    name: 'FLSM z pełnymi danymi podsieci',
+    summary: 'Podział na dowolną liczbę równych podsieci: adres, maska, rozgłoszeniowy, zakres i liczba hostów.',
+    generate: (rng) => {
+      const count = randInt(rng, 3, 12);
+      const bits = Net.log2Ceil(count);
+      const prefix = randInt(rng, 16, 28 - bits);
+      return { parent: Net.cidrText(randomBase(rng, prefix), prefix), count };
+    },
+    build: ({ parent, count }) => ({
+      prompt: [
+        'Podziel sieć o adresie IP `' + parent + '` na ' + count + ' ' + rowne(count) + ', maksymalnie dużych podsieci. Podaj dla każdej:',
+        { list: ['adres podsieci i maskę,', 'adres rozgłoszeniowy,', 'zakres i liczbę adresów hostowych.'] },
+        'Przydział każdej podsieci rozpocznij od pierwszego wolnego adresu.',
+      ],
+      fields: Array.from({ length: count }, (_, i) => detailFields('s' + i, 'Podsieć ' + (i + 1), true)).flat(),
+    }),
+    check: (task, answers) => {
+      const parent = parseParent(task.params.parent);
+      const plan = Net.splitEqual(parent.ip, parent.prefix, task.params.count);
+      const fields = {};
+      plan.subnets.forEach((s, i) => Object.assign(fields, checkDetail(answers, 's' + i, s, true)));
+      return summarize(fields);
+    },
+    solve: (task) => {
+      const parent = parseParent(task.params.parent);
+      const { count } = task.params;
+      const plan = Net.splitEqual(parent.ip, parent.prefix, count);
+      const blocks = [
+        'Szukamy najmniejszego k, dla którego 2^{k} jest co najmniej ' + count + '. Tu k = **' + plan.bits + '** (2^{' + plan.bits + '} = ' + Math.pow(2, plan.bits) + '), więc pożyczamy ' + plan.bits + ' bitów z części hosta. Nie pożyczamy więcej, dzięki temu podsieci są największe z możliwych.',
+        'Nowy prefiks: /' + parent.prefix + ' + ' + plan.bits + ' = **/' + plan.prefix + '**, maska **' + Net.formatIp(Net.maskInt(plan.prefix)) + '**. Każda podsieć ma ' + fmt(plan.subnets[0].size) + ' adresów, w tym ' + fmt(Net.usableHosts(plan.prefix)) + ' adresów hostowych.',
+        {
+          table: {
+            head: ['Podsieć', 'Adres podsieci', 'Zakres hostów', 'Adres rozgłoszeniowy', 'Hosty'],
+            rows: plan.subnets.map((s, i) => [
+              String(i + 1), Net.cidrText(s.network, s.prefix),
+              Net.formatIp(s.network + 1) + ' do ' + Net.formatIp(s.broadcast - 1), Net.formatIp(s.broadcast), fmt(Net.usableHosts(s.prefix)),
+            ]),
+          },
+        },
+      ];
+      const free = parent.ip + count * plan.subnets[0].size;
+      const end = Net.broadcastOf(parent.ip, parent.prefix);
+      if (free <= end) blocks.push('Niewykorzystane zostaje ' + (Math.pow(2, plan.bits) - count) + ' z ' + Math.pow(2, plan.bits) + ' bloków: od ' + Net.formatIp(free) + ' do ' + Net.formatIp(end) + '.');
+      return blocks;
+    },
+  };
+
+  function addressPlan({ base, count, addresses }) {
+    const hostBits = Net.log2Ceil(addresses);
+    const subPrefix = 32 - hostBits;
+    const bits = Net.log2Ceil(count);
+    const parentPrefix = subPrefix - bits;
+    if (hostBits < 2 || parentPrefix < 1) throw new RangeError('Zadanie nie ma rozwiązania');
+    const ip = Net.parseIp(base);
+    if (Net.networkOf(ip, parentPrefix) !== ip) throw new RangeError('Adres sieci nie pasuje do maski');
+    const size = Net.blockSize(subPrefix);
+    const subnets = Array.from({ length: count }, (_, i) => ({
+      network: ip + i * size, prefix: subPrefix, broadcast: ip + (i + 1) * size - 1, size,
+    }));
+    return { hostBits, subPrefix, bits, parentPrefix, size, subnets };
+  }
+
+  const subnetCount = {
+    id: 'subnetCount',
+    name: 'Podsieci o zadanej liczbie adresów',
+    summary: 'Maski sieci głównej i podsieci oraz adresy wybranych podsieci, gdy znasz liczbę podsieci i adresów w każdej.',
+    generate: (rng) => {
+      const count = randInt(rng, 5, 30);
+      const addresses = 10 * randInt(rng, 10, 400);
+      const parentPrefix = 32 - Net.log2Ceil(addresses) - Net.log2Ceil(count);
+      return { base: Net.formatIp(randomBase(rng, parentPrefix)), count, addresses, pick: randInt(rng, 2, count - 1) };
+    },
+    build: (params) => {
+      const { base, count, addresses, pick } = params;
+      addressPlan(params);
+      return {
+        prompt: ['Podziel sieć o adresie `' + base + '` na ' + count + ' podsieci po ' + addresses + ' adresów każda. Załóż, że maska zadanej sieci jest maksymalnie długa. Przydział każdej podsieci rozpocznij od pierwszego wolnego adresu.'],
+        fields: [
+          textField('parentMask', 'Maska zadanej sieci', 'Dziesiętnie albo jako prefiks /n', true),
+          textField('subMask', 'Maska podsieci', 'Dziesiętnie albo jako prefiks /n', true),
+          textField('pick', 'Adres ' + pick + '. podsieci', 'Cztery liczby oddzielone kropkami', true),
+          textField('last', 'Adres ostatniej (' + count + '.) podsieci', 'Cztery liczby oddzielone kropkami', true),
+          textField('lastBcast', 'Adres rozgłoszeniowy ostatniej podsieci', 'Cztery liczby oddzielone kropkami', true),
+        ],
+      };
+    },
+    check: (task, answers) => {
+      const plan = addressPlan(task.params);
+      const last = plan.subnets[plan.subnets.length - 1];
+      const picked = plan.subnets[task.params.pick - 1];
+      return summarize({
+        parentMask: judge(answers.parentMask, parseMaskAnswer, (v) => v === plan.parentPrefix, maskText(plan.parentPrefix)),
+        subMask: judge(answers.subMask, parseMaskAnswer, (v) => v === plan.subPrefix, maskText(plan.subPrefix)),
+        pick: judge(answers.pick, parseIpAnswer, (v) => v === picked.network, Net.formatIp(picked.network)),
+        last: judge(answers.last, parseIpAnswer, (v) => v === last.network, Net.formatIp(last.network)),
+        lastBcast: judge(answers.lastBcast, parseIpAnswer, (v) => v === last.broadcast, Net.formatIp(last.broadcast)),
+      });
+    },
+    solve: (task) => {
+      const { addresses, count } = task.params;
+      const plan = addressPlan(task.params);
+      return [
+        'Liczba adresów w podsieci jest potęgą dwójki, więc bierzemy najmniejszą potęgę, która mieści ' + addresses + ' adresów: 2^{' + plan.hostBits + '} = ' + fmt(plan.size) + '. To ' + plan.hostBits + ' bitów hosta, prefiks podsieci 32 - ' + plan.hostBits + ' = **/' + plan.subPrefix + '**, maska **' + Net.formatIp(Net.maskInt(plan.subPrefix)) + '**.',
+        'Przyjmujemy, że ' + addresses + ' to liczba adresów w podsieci razem z adresem sieci i rozgłoszeniowym, a nie liczba hostów.',
+        'Podsieci ma być ' + count + ', więc potrzebne jest najmniejsze k, dla którego 2^{k} jest co najmniej ' + count + ': k = **' + plan.bits + '** (2^{' + plan.bits + '} = ' + Math.pow(2, plan.bits) + '). Maska sieci zadanej jest o k bitów krótsza niż maska podsieci: ' + plan.subPrefix + ' - ' + plan.bits + ' = **/' + plan.parentPrefix + '**, czyli **' + Net.formatIp(Net.maskInt(plan.parentPrefix)) + '**. Krótsza maska zmieściłaby podsieci z zapasem, dłuższa już nie, więc to jest maksymalnie długa maska.',
+        'Kolejne podsieci zaczynają się co ' + fmt(plan.size) + ' adresów.',
+        {
+          table: {
+            head: ['Podsieć', 'Adres sieci/prefiks', 'Adres rozgłoszeniowy'],
+            rows: plan.subnets.map((s, i) => [String(i + 1), Net.cidrText(s.network, s.prefix), Net.formatIp(s.broadcast)]),
+          },
+        },
+      ];
+    },
+  };
+
+  const vlsmFull = {
+    id: 'vlsmFull',
+    name: 'VLSM z pełnymi danymi podsieci',
+    summary: 'Podsieci o różnych rozmiarach: maska sieci głównej oraz adres, maska, rozgłoszeniowy i zakres każdej podsieci.',
+    generate: (rng) => {
+      const base = vlsm.generate(rng);
+      if (rng() < 0.5 && base.hosts.length < 5) {
+        const hosts = base.hosts.slice();
+        hosts.splice(randInt(rng, 0, hosts.length), 0, pick(rng, hosts));
+        const parent = parseParent(base.parent);
+        try {
+          Net.allocateVlsm(parent.ip, parent.prefix, hosts);
+          return { parent: base.parent, hosts };
+        } catch (err) {
+          if (!(err instanceof RangeError)) throw err;
+        }
+      }
+      return base;
+    },
+    build: ({ parent, hosts }) => ({
+      prompt: [
+        'Podziel sieć o adresie IP `' + parent + '` na podsieci po ' + listPl(hosts.map(String)) + ' hostów. Przydział każdej podsieci rozpocznij od pierwszego wolnego adresu. Podaj adresy podsieci, zakresy adresów hostów, adresy rozgłoszeniowe oraz maski podsieci.',
+        'Podaj maskę sieci głównej, maskę podsieci oraz adresy sieciowe i rozgłoszeniowe dla pierwszych trzech podsieci.',
+      ],
+      fields: [textField('parentMask', 'Maska sieci głównej', 'Dziesiętnie albo jako prefiks /n', true)].concat(
+        hosts.map((hostCount, i) => detailFields('s' + i, 'Podsieć ' + (i + 1) + ': ' + hostCount + ' hostów', false)).flat()
+      ),
+    }),
+    check: (task, answers) => {
+      const parent = parseParent(task.params.parent);
+      const plan = Net.allocateVlsm(parent.ip, parent.prefix, task.params.hosts);
+      const fields = {
+        parentMask: judge(answers.parentMask, parseMaskAnswer, (v) => v === parent.prefix, maskText(parent.prefix)),
+      };
+      task.params.hosts.forEach((_, i) => {
+        const a = plan.allocations.find((x) => x.index === i);
+        Object.assign(fields, checkDetail(answers, 's' + i, a, false));
+      });
+      return summarize(fields);
+    },
+    solve: (task) => {
+      const parent = parseParent(task.params.parent);
+      const plan = Net.allocateVlsm(parent.ip, parent.prefix, task.params.hosts);
+      const blocks = vlsm.solve(task);
+      blocks.push('Maska sieci głównej to prefiks z zapisu sieci: /' + parent.prefix + ', czyli **' + Net.formatIp(Net.maskInt(parent.prefix)) + '**.');
+      if (new Set(task.params.hosts).size < task.params.hosts.length) {
+        blocks.push('Gdy dwa wymagania są równe, pierwszą wolną podsieć dostaje to, które stoi wcześniej na liście zadania.');
+      }
+      const firstThree = plan.allocations.slice(0, 3).map((a) => {
+        const d = Net.describe(a.network, a.prefix);
+        return Net.formatIp(d.network) + ' (maska ' + Net.formatIp(d.mask) + ', rozgłoszeniowy ' + Net.formatIp(d.broadcast) + ')';
+      });
+      blocks.push('Pierwsze trzy podsieci w kolejności przydziału (od największej): ' + firstThree.join('; ') + '.');
+      return blocks;
+    },
+  };
+
   // ---------- registry ----------
 
-  const TYPES = [dec2bin, bin2dec, hostsInPrefix, ipClass, netBroadcast, vlsm, flsmCount, flsmHosts, partition];
+  const TYPES = [dec2bin, bin2dec, hostsInPrefix, ipClass, netBroadcast, vlsm, flsmCount, flsmHosts, partition, classNet, flsmDetail, subnetCount, vlsmFull];
   const BY_ID = Object.fromEntries(TYPES.map((t) => [t.id, t]));
 
-  // The nine tasks from the class sheet, verbatim.
+  // The nine tasks from the first class sheet, verbatim.
   const FIXED = [
     { label: 'Zadanie 1a', type: 'dec2bin', params: { value: 191 } },
     { label: 'Zadanie 1b', type: 'bin2dec', params: { bits: '11001101' } },
@@ -698,6 +966,14 @@
     { label: 'Zadanie 6a (FLSM)', type: 'flsmCount', params: { parent: '10.10.32.0/21', count: 4 } },
     { label: 'Zadanie 6b (FLSM)', type: 'flsmHosts', params: { parent: '10.0.0.0/27', count: 2, hosts: 8 } },
     { label: 'Zadanie 7', type: 'partition', params: { parent: '192.168.0.0/27', total: 26 } },
+  ];
+
+  // The four tasks from the second sheet, verbatim.
+  const FIXED2 = [
+    { label: 'Arkusz 2, zadanie 1', type: 'classNet', params: { ip: '172.25.147.85', prefix: 20 } },
+    { label: 'Arkusz 2, zadanie 2', type: 'flsmDetail', params: { parent: '220.110.40.0/24', count: 5 } },
+    { label: 'Arkusz 2, zadanie 3', type: 'subnetCount', params: { base: '160.155.0.0', count: 28, addresses: 1000, pick: 2 } },
+    { label: 'Arkusz 2, zadanie 4', type: 'vlsmFull', params: { parent: '172.16.0.0/16', hosts: [10, 50, 200, 10, 100] } },
   ];
 
   function build(typeId, params, label) {
@@ -714,7 +990,7 @@
   }
 
   function fixedTask(typeId) {
-    const entry = FIXED.find((f) => f.type === typeId);
+    const entry = FIXED.concat(FIXED2).find((f) => f.type === typeId);
     return entry ? build(entry.type, entry.params, entry.label) : null;
   }
 
@@ -726,16 +1002,17 @@
     return BY_ID[task.type].solve(task);
   }
 
-  // kind: 'fixed' (class sheet) or 'random' (same nine types, fresh numbers)
+  // kind: 'fixed' | 'fixed2' (sheet verbatim) or 'random' | 'random2' (same types, fresh numbers)
   function testSet(kind, rng) {
-    return FIXED.map((entry) =>
-      kind === 'fixed'
+    const entries = kind.endsWith('2') ? FIXED2 : FIXED;
+    return entries.map((entry) =>
+      kind.startsWith('fixed')
         ? build(entry.type, entry.params, entry.label)
         : { ...generate(entry.type, rng), label: entry.label }
     );
   }
 
-  const api = { TYPES, BY_ID, FIXED, build, generate, fixedTask, check, solve, testSet, mulberry32, fmt, hostsWord, partitionPlan };
+  const api = { TYPES, BY_ID, FIXED, FIXED2, build, generate, fixedTask, check, solve, testSet, mulberry32, fmt, hostsWord, partitionPlan };
   root.Tasks = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis);

@@ -45,10 +45,10 @@ Theme: both ship. A student studies day and night and no fixed theme is justifie
 
 ## Structure
 
-The product has four parts, each a real route: Ćwiczenia (per-type practice with live accuracy), Test (nine tasks, scored at the end), Teoria (reference with an interactive prefix slider), Kalkulator (checks a worked answer). No landing page: the first screen is the practice list because that is the job of the tool.
+The product has four parts, each a real route: Ćwiczenia (per-type practice with live accuracy), Test (two sheets, scored at the end), Teoria (reference with an interactive prefix slider), Kalkulator (checks a worked answer). No landing page: the first screen is the practice list because that is the job of the tool.
 
 ## Content rules
 
 - Every number shown is computed from stored answers or from the arithmetic being taught. No sample statistics.
-- The nine tasks from the owner's class sheet are shipped verbatim as the fixed test set. Random tasks use the same task types.
+- The tasks from the owner's two class sheets (nine and four) are shipped verbatim as the fixed test sets. Random tasks use the same task types.
 - Product name "Podsieci" is a text placeholder, not a final brand.

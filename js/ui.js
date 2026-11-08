@@ -147,9 +147,20 @@
     form.addEventListener('input', () => options.onInput && options.onInput());
     form.addEventListener('change', () => options.onInput && options.onInput());
 
-    form.appendChild(h('div', { class: 'prompt' }, task.prompt.map((p) => h('p', null, rich(p)))));
+    form.appendChild(
+      h('div', { class: 'prompt' }, task.prompt.map((p) => (typeof p === 'string' ? h('p', null, rich(p)) : h('ul', null, p.list.map((item) => h('li', null, rich(item)))))))
+    );
+
+    // fields that share a `group` sit together under one legend
+    let container = form;
+    let currentGroup = null;
 
     task.fields.forEach((field) => {
+      if ((field.group || null) !== currentGroup) {
+        currentGroup = field.group || null;
+        container = currentGroup ? h('fieldset', { class: 'group' }, h('legend', null, currentGroup)) : form;
+        if (currentGroup) form.appendChild(container);
+      }
       const base = prefix + '-' + field.id;
       const hint = h('span', { class: 'hint', id: base + '-hint' }, field.hint);
       const feedback = h('p', { class: 'feedback', id: base + '-fb', hidden: true });
@@ -159,9 +170,9 @@
           type: 'text', id: base, name: field.id, class: field.mono ? 'mono' : null, autocomplete: 'off',
           autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false', 'aria-describedby': base + '-hint ' + base + '-fb',
         });
-        const wrap = h('div', { class: 'field' }, h('label', { for: base }, field.label), hint, input, feedback);
+        const wrap = h('div', { class: field.wide ? 'field is-wide' : 'field' }, h('label', { for: base }, field.label), hint, input, feedback);
         controls[field.id] = { kind: 'text', wrap, feedback, input };
-        form.appendChild(wrap);
+        container.appendChild(wrap);
       } else if (field.kind === 'choice') {
         const radios = field.options.map((text, i) => {
           const input = h('input', { type: 'radio', name: base, value: String(i), 'aria-describedby': base + '-fb' });
@@ -177,7 +188,7 @@
           feedback
         );
         controls[field.id] = { kind: 'choice', wrap, feedback, radios };
-        form.appendChild(wrap);
+        container.appendChild(wrap);
       } else if (field.kind === 'list') {
         const list = h('ol', { class: 'rows' });
         const rows = [];
@@ -218,7 +229,7 @@
         addRow('');
         addRow('');
         controls[field.id] = { kind: 'list', wrap, feedback, rows, addRow, addButton, renumber, list };
-        form.appendChild(wrap);
+        container.appendChild(wrap);
       }
     });
 

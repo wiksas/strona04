@@ -10,12 +10,12 @@ Otwórz `index.html` w przeglądarce albo uruchom dowolny serwer statyczny w tym
 
 | Widok | Zawartość |
 |---|---|
-| Ćwiczenia | 9 typów zadań, losowane od nowa, sprawdzane od razu, z rozwiązaniem krok po kroku. Statystyki per typ zapisują się w `localStorage`. |
-| Test | Zestaw z zajęć (9 zadań z arkusza, dosłownie) albo zestaw losowy tych samych typów. Wynik, czas i rozwiązania po zakończeniu. |
+| Ćwiczenia | 13 typów zadań, losowane od nowa, sprawdzane od razu, z rozwiązaniem krok po kroku. Statystyki per typ zapisują się w `localStorage`. |
+| Test | Arkusz 1 (9 zadań) i arkusz 2 (4 zadania), każdy w wersji dosłownej z arkusza albo losowej z tymi samymi typami zadań. Wynik, czas i rozwiązania po zakończeniu. |
 | Teoria | Systemy liczbowe, maska i prefiks (suwak), klasy i adresy prywatne, adres sieci, VLSM, FLSM, suma hostów, tablica prefiksów. |
 | Kalkulator | Adres z prefiksem lub maską: adres sieci, rozgłoszeniowy, zakres hostów, klasa, rodzaj adresu. |
 
-Typy zadań: dziesiętny na dwójkowy, dwójkowy na dziesiętny, liczba hostów w sieci, klasa adresu i adresy prywatne, adres sieci i rozgłoszeniowy, VLSM, FLSM na równe podsieci, FLSM pod liczbę hostów, podział pod sumę hostów.
+Typy zadań: dziesiętny na dwójkowy, dwójkowy na dziesiętny, liczba hostów w sieci, klasa adresu i adresy prywatne, adres sieci i rozgłoszeniowy, VLSM, FLSM na równe podsieci, FLSM pod liczbę hostów, podział pod sumę hostów (arkusz 1) oraz klasa i adres sieci z maską, FLSM z pełnymi danymi podsieci, podsieci o zadanej liczbie adresów, VLSM z pełnymi danymi podsieci (arkusz 2).
 
 Odpowiedzi w podziałach są sprawdzane regułami, nie porównaniem z jednym wzorcem: kolejność podsieci w FLSM jest dowolna, a w zadaniu na sumę hostów przechodzi każdy podział spełniający warunki.
 
@@ -40,4 +40,4 @@ DESIGN.md         kierunek wizualny i powody decyzji
 npm test
 ```
 
-Wymaga Node 20 lub nowszego. Testy sprawdzają arytmetykę sieci, odpowiedzi do dziewięciu zadań z arkusza oraz 300 losowych zadań na każdy typ (zadanie się buduje, pusta odpowiedź daje 0, poprawna odpowiedź daje komplet punktów).
+Wymaga Node 20 lub nowszego. Testy sprawdzają arytmetykę sieci, odpowiedzi do zadań z obu arkuszy oraz 300 losowych zadań na każdy typ (zadanie się buduje, pusta odpowiedź daje 0, poprawna odpowiedź daje komplet punktów).

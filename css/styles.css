@@ -263,10 +263,11 @@ input[type='radio'] { width: 1.2rem; height: 1.2rem; margin: 0.2rem 0 0; accent-
 .topic h2 { font-size: 1.2rem; margin-bottom: 0.25rem; }
 .topic p { margin: 0 0 0.25rem; }
 .topic-stat { font-size: 0.95rem; }
-.topic .btn { justify-self: start; }
+.topic .btn, .topic-actions { justify-self: start; }
+.topic-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
 @media (min-width: 40rem) {
   .topic { grid-template-columns: minmax(0, 1fr) auto; }
-  .topic .btn { justify-self: end; }
+  .topic .btn, .topic-actions { justify-self: end; }
 }
 
 .history { list-style: none; padding: 0; max-width: none; }
@@ -286,6 +287,16 @@ input[type='radio'] { width: 1.2rem; height: 1.2rem; margin: 0.2rem 0 0; accent-
 .task-form { margin-top: 1.5rem; }
 .prompt { margin-bottom: 1.75rem; }
 .prompt p { font-size: 1.25rem; line-height: 1.45; max-width: 60ch; }
+.prompt ul { font-size: 1.15rem; line-height: 1.45; max-width: 60ch; margin: 0 0 1em; }
+
+.group {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 0 1.5rem;
+  min-width: 0; margin: 0 0 1.5rem; padding: 1rem 1.25rem 0.25rem;
+  border: 1.5px solid var(--rule); border-radius: var(--radius-m);
+}
+.group > legend { padding: 0 0.5rem; font-weight: 700; font-size: 1.1rem; }
+.group .field { margin-bottom: 1.25rem; }
+.group .is-wide { grid-column: 1 / -1; }
 
 .field { border: 0; padding: 0; margin: 0 0 1.75rem; min-width: 0; }
 .field > label, .field > legend {
